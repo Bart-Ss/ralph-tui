@@ -737,3 +737,85 @@ Started: Sun 11 Jan 10:55:32 GMT 2026
   - CONTRIBUTING.md lowers barrier to entry by setting clear expectations upfront
   - License year should match the current year (2026)
 ---
+
+## 2026-01-11 - ralph-tui-45r.24
+- What was implemented:
+  - US-024: PRD Creation Command with full acceptance criteria
+  - New prd module (src/prd/) with types, questions, generator, and wizard
+  - Interactive wizard asking for feature description and 5 clarifying questions
+  - Questions cover: target users, problem statement, success criteria, constraints, scope
+  - PRD generator creates markdown with user stories and acceptance criteria
+  - User stories include title, description, acceptance criteria, priority, dependencies
+  - Output saved to ./tasks/prd-[feature-name].md (kebab-case slug)
+  - Option to convert to prd.json tracker format for use with ralph-tui run
+  - CLI command: ralph-tui init with --cwd, --output, --stories, --force options
+  - Help text with examples for the init command
+- Files changed:
+  - src/prd/types.ts (new) - Type definitions for PRD, user stories, generation options
+  - src/prd/questions.ts (new) - 5 clarifying questions for PRD creation
+  - src/prd/generator.ts (new) - PRD generation, markdown rendering, JSON conversion
+  - src/prd/wizard.ts (new) - Interactive wizard with prompts and file saving
+  - src/prd/index.ts (new) - Module exports
+  - src/commands/init.ts (new) - Init command handler with argument parsing
+  - src/commands/index.ts (updated) - Export init command
+  - src/cli.tsx (updated) - Add init command handling and help text
+- **Learnings:**
+  - Reusing setup/prompts.ts provides consistent terminal UI across all interactive commands
+  - The slugify function is essential for creating safe file/branch names from user input
+  - User stories can be generated heuristically from answers - real AI generation would be better
+  - The prd.json format from json.ts tracker defines the target structure for conversion
+  - Follow-up questions when answers are too brief improve PRD quality
+---
+
+## 2026-01-11 - ralph-tui-45r.25
+- What was implemented:
+  - US-025: PRD to JSON Conversion with full acceptance criteria
+  - New markdown parser (src/prd/parser.ts) for extracting user stories from PRD documents
+  - Convert command: ralph-tui convert --to json ./tasks/prd-feature.md
+  - User story extraction from ### US-XXX: Title sections
+  - Acceptance criteria extraction from checklist items (- [ ] item)
+  - Priority extraction from **Priority:** P1-P4 lines
+  - Dependencies extraction from **Depends on:** lines
+  - Branch name prompt during conversion (or --branch flag)
+  - Custom output path support via --output flag (default: ./prd.json)
+  - Verbose mode (--verbose) for detailed parsing output
+  - Parsing warnings for stories without acceptance criteria
+  - Order-based priority assignment when not explicitly specified
+- Files changed:
+  - src/prd/parser.ts (new) - Markdown PRD parser
+  - src/commands/convert.ts (new) - Convert command implementation
+  - src/commands/index.ts (updated) - Export convert command
+  - src/cli.tsx (updated) - Add convert command handling and help text
+  - src/prd/index.ts (updated) - Export parser functions
+- **Learnings:**
+  - Regex patterns for markdown parsing: USER_STORY_HEADER_PATTERN matches ### US-XXX: Title
+  - Checklist pattern: /^-\s+\[[\sx]\]\s+(.+)$/ handles both checked and unchecked items
+  - Section extraction requires careful boundary detection (next header or separator)
+  - Order-based priority (1st story = P1) provides sensible defaults when not explicit
+  - Reusing prompts.ts from setup module maintains consistent terminal UI
+---
+
+## 2026-01-11 - ralph-tui-45r.26
+- What was implemented:
+  - US-026: PRD to Beads Conversion with full acceptance criteria
+  - Extended ConvertFormat type to support 'beads' in addition to 'json'
+  - Added --labels, -l option for custom labels (ralph always included)
+  - execBd() helper function for spawning bd commands with stdout/stderr capture
+  - convertToBeads() function that orchestrates the entire conversion:
+    1. Creates epic bead with PRD name, description, labels, P1 priority
+    2. Creates child beads for each user story with parent reference
+    3. Sets up dependencies from explicit dependsOn fields in stories
+    4. Runs bd sync after creation
+  - executeBeadsConversion() handles bd availability check and summary display
+  - Story beads include acceptance criteria as markdown checklist in description
+  - All created bead IDs displayed at end for easy reference
+  - Run command hint: ralph-tui run --epic <epicId>
+- Files changed:
+  - src/commands/convert.ts (updated) - Added beads format support, ~300 new lines
+- **Learnings:**
+  - bd create --silent returns just the new bead ID on stdout (perfect for scripting)
+  - bd dep add <blocked-id> <blocker-id> creates blocking dependency
+  - The epic/child pattern via --parent flag creates hierarchical beads
+  - Labels are always comma-separated for both CLI args and internal arrays
+  - Sync failures shouldn't abort the whole conversion (beads are already created)
+---
