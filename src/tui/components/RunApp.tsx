@@ -385,6 +385,11 @@ export function RunApp({
             setCurrentOutput((prev) => prev + event.data);
           }
           break;
+
+        case 'tasks:refreshed':
+          // Update task list with fresh data from tracker
+          setTasks(convertTasksWithDependencyStatus(event.tasks));
+          break;
       }
     });
 
@@ -533,6 +538,11 @@ export function RunApp({
             setStatus('running');
             onStart();
           }
+          break;
+
+        case 'r':
+          // Refresh task list from tracker
+          engine.refreshTasks();
           break;
 
         case 'return':

@@ -163,6 +163,33 @@ export class ExecutionEngine {
   }
 
   /**
+   * Refresh the task list from the tracker and emit a tasks:refreshed event.
+   * Call this when the user wants to manually refresh the task list (e.g., 'r' key).
+   */
+  async refreshTasks(): Promise<void> {
+    if (!this.tracker) {
+      return;
+    }
+
+    // Fetch all tasks including completed for TUI display
+    const tasks = await this.tracker.getTasks({
+      status: ['open', 'in_progress', 'completed'],
+    });
+
+    // Update total task count (open/in_progress only)
+    const activeTasks = tasks.filter(
+      (t) => t.status === 'open' || t.status === 'in_progress'
+    );
+    this.state.totalTasks = activeTasks.length;
+
+    this.emit({
+      type: 'tasks:refreshed',
+      timestamp: new Date().toISOString(),
+      tasks,
+    });
+  }
+
+  /**
    * Start the execution loop
    */
   async start(): Promise<void> {

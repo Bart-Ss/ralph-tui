@@ -92,7 +92,8 @@ export type EngineEventType =
   | 'task:selected'
   | 'task:completed'
   | 'agent:output'
-  | 'all:complete';
+  | 'all:complete'
+  | 'tasks:refreshed';
 
 /**
  * Base engine event
@@ -263,6 +264,15 @@ export interface AllCompleteEvent extends EngineEventBase {
 }
 
 /**
+ * Tasks refreshed event - emitted when task list is manually refreshed
+ */
+export interface TasksRefreshedEvent extends EngineEventBase {
+  type: 'tasks:refreshed';
+  /** Refreshed task list */
+  tasks: TrackerTask[];
+}
+
+/**
  * Union of all engine events
  */
 export type EngineEvent =
@@ -278,7 +288,8 @@ export type EngineEvent =
   | TaskSelectedEvent
   | TaskCompletedEvent
   | AgentOutputEvent
-  | AllCompleteEvent;
+  | AllCompleteEvent
+  | TasksRefreshedEvent;
 
 /**
  * Event listener function type
