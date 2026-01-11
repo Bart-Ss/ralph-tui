@@ -13,10 +13,13 @@ import {
   resumePersistedSession,
   savePersistedSession,
   deletePersistedSession,
+  pauseSession,
+  updateSessionAfterIteration,
   acquireLock,
   releaseLock,
   checkSession,
   cleanStaleLock,
+  type PersistedSessionState,
 } from '../session/index.js';
 import { buildConfig, validateConfig } from '../config/index.js';
 import type { RuntimeOptions } from '../config/types.js';
@@ -82,13 +85,38 @@ async function initializePlugins(): Promise<void> {
  */
 async function runWithTui(
   engine: ExecutionEngine,
-  cwd: string
-): Promise<void> {
+  cwd: string,
+  initialState: PersistedSessionState
+): Promise<PersistedSessionState> {
+  let currentState = initialState;
+
   const renderer = await createCliRenderer({
     exitOnCtrlC: false,
   });
 
   const root = createRoot(renderer);
+
+  // Subscribe to engine events to save state
+  engine.on((event) => {
+    if (event.type === 'iteration:completed') {
+      currentState = updateSessionAfterIteration(currentState, event.result);
+      savePersistedSession(currentState).catch(() => {
+        // Log but don't fail on save errors
+      });
+    } else if (event.type === 'engine:paused') {
+      // Save paused state to session file
+      currentState = pauseSession(currentState);
+      savePersistedSession(currentState).catch(() => {
+        // Log but don't fail on save errors
+      });
+    } else if (event.type === 'engine:resumed') {
+      // Clear paused state when resuming
+      currentState = { ...currentState, status: 'running', isPaused: false, pausedAt: undefined };
+      savePersistedSession(currentState).catch(() => {
+        // Log but don't fail on save errors
+      });
+    }
+  });
 
   const cleanup = async (): Promise<void> => {
     await engine.dispose();
@@ -97,6 +125,9 @@ async function runWithTui(
   };
 
   const handleSignal = async (): Promise<void> => {
+    // Save interrupted state
+    currentState = { ...currentState, status: 'interrupted' };
+    await savePersistedSession(currentState);
     await cleanup();
     process.exit(0);
   };
@@ -108,6 +139,9 @@ async function runWithTui(
     <RunApp
       engine={engine}
       onQuit={async () => {
+        // Save interrupted state
+        currentState = { ...currentState, status: 'interrupted' };
+        await savePersistedSession(currentState);
         await cleanup();
         process.exit(0);
       }}
@@ -116,6 +150,7 @@ async function runWithTui(
 
   await engine.start();
   await cleanup();
+  return currentState;
 }
 
 /**
@@ -123,8 +158,11 @@ async function runWithTui(
  */
 async function runHeadless(
   engine: ExecutionEngine,
-  cwd: string
-): Promise<void> {
+  cwd: string,
+  initialState: PersistedSessionState
+): Promise<PersistedSessionState> {
+  let currentState = initialState;
+
   engine.on((event) => {
     switch (event.type) {
       case 'engine:started':
@@ -141,10 +179,31 @@ async function runHeadless(
             `Task ${event.result.taskCompleted ? 'DONE' : 'in progress'}. ` +
             `Duration: ${Math.round(event.result.durationMs / 1000)}s`
         );
+        // Save state after each iteration
+        currentState = updateSessionAfterIteration(currentState, event.result);
+        savePersistedSession(currentState).catch(() => {
+          // Log but don't fail on save errors
+        });
         break;
 
       case 'iteration:failed':
         console.error(`Iteration ${event.iteration} FAILED: ${event.error}`);
+        break;
+
+      case 'engine:paused':
+        console.log('\nPaused. Use "ralph-tui resume" to continue.');
+        currentState = pauseSession(currentState);
+        savePersistedSession(currentState).catch(() => {
+          // Log but don't fail on save errors
+        });
+        break;
+
+      case 'engine:resumed':
+        console.log('\nResumed...');
+        currentState = { ...currentState, status: 'running', isPaused: false, pausedAt: undefined };
+        savePersistedSession(currentState).catch(() => {
+          // Log but don't fail on save errors
+        });
         break;
 
       case 'engine:stopped':
@@ -154,13 +213,16 @@ async function runHeadless(
         break;
 
       case 'all:complete':
-        console.log('\n🎉 All tasks complete!');
+        console.log('\nAll tasks complete!');
         break;
     }
   });
 
   const handleSignal = async (): Promise<void> => {
     console.log('\nInterrupted, stopping...');
+    // Save interrupted state
+    currentState = { ...currentState, status: 'interrupted' };
+    await savePersistedSession(currentState);
     await engine.dispose();
     await releaseLock(cwd);
     process.exit(0);
@@ -172,6 +234,7 @@ async function runHeadless(
   await engine.start();
   await engine.dispose();
   await releaseLock(cwd);
+  return currentState;
 }
 
 /**
@@ -301,11 +364,12 @@ export async function executeResumeCommand(args: string[]): Promise<void> {
   // Task statuses are read from the tracker which should be in sync
 
   // Run with TUI or headless
+  let finalState: PersistedSessionState;
   try {
     if (!headless && config.showTui) {
-      await runWithTui(engine, cwd);
+      finalState = await runWithTui(engine, cwd, resumedState);
     } else {
-      await runHeadless(engine, cwd);
+      finalState = await runHeadless(engine, cwd, resumedState);
     }
   } catch (error) {
     console.error(
@@ -317,13 +381,15 @@ export async function executeResumeCommand(args: string[]): Promise<void> {
   }
 
   // Clean up session file on successful completion
-  const finalState = await loadPersistedSession(cwd);
-  if (finalState && finalState.status === 'completed') {
+  if (finalState.status === 'completed') {
     await deletePersistedSession(cwd);
     console.log('Session completed and cleaned up.');
+  } else if (finalState.status === 'paused') {
+    console.log('\nSession paused. Use "ralph-tui resume" to continue.');
+  } else {
+    console.log('\nSession state saved. Use "ralph-tui resume" to continue.');
   }
 
-  await releaseLock(cwd);
   console.log('\nRalph TUI finished.');
 }
 

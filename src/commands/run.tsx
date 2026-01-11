@@ -20,6 +20,7 @@ import {
   deletePersistedSession,
   createPersistedSession,
   updateSessionAfterIteration,
+  pauseSession,
   completeSession,
   failSession,
   isSessionResumable,
@@ -264,10 +265,22 @@ async function runWithTui(
 
   const root = createRoot(renderer);
 
-  // Subscribe to iteration events to save state
+  // Subscribe to engine events to save state
   engine.on((event) => {
     if (event.type === 'iteration:completed') {
       currentState = updateSessionAfterIteration(currentState, event.result);
+      savePersistedSession(currentState).catch(() => {
+        // Log but don't fail on save errors
+      });
+    } else if (event.type === 'engine:paused') {
+      // Save paused state to session file
+      currentState = pauseSession(currentState);
+      savePersistedSession(currentState).catch(() => {
+        // Log but don't fail on save errors
+      });
+    } else if (event.type === 'engine:resumed') {
+      // Clear paused state when resuming
+      currentState = { ...currentState, status: 'running', isPaused: false, pausedAt: undefined };
       savePersistedSession(currentState).catch(() => {
         // Log but don't fail on save errors
       });
@@ -351,6 +364,22 @@ async function runHeadless(
 
       case 'iteration:failed':
         console.error(`Iteration ${event.iteration} FAILED: ${event.error}`);
+        break;
+
+      case 'engine:paused':
+        console.log('\nPaused. Use "ralph-tui resume" to continue.');
+        currentState = pauseSession(currentState);
+        savePersistedSession(currentState).catch(() => {
+          // Log but don't fail on save errors
+        });
+        break;
+
+      case 'engine:resumed':
+        console.log('\nResumed...');
+        currentState = { ...currentState, status: 'running', isPaused: false, pausedAt: undefined };
+        savePersistedSession(currentState).catch(() => {
+          // Log but don't fail on save errors
+        });
         break;
 
       case 'engine:stopped':

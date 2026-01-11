@@ -10,16 +10,18 @@ import type { HeaderProps } from '../types.js';
 /**
  * Get the status indicator and color for the current Ralph status
  */
-function getStatusDisplay(status: RalphStatus): { indicator: string; color: string } {
+function getStatusDisplay(status: RalphStatus): { indicator: string; color: string; label: string } {
   switch (status) {
     case 'running':
-      return { indicator: statusIndicators.running, color: colors.status.success };
+      return { indicator: statusIndicators.running, color: colors.status.success, label: 'Running' };
+    case 'pausing':
+      return { indicator: statusIndicators.pausing, color: colors.status.warning, label: 'Pausing...' };
     case 'paused':
-      return { indicator: statusIndicators.paused, color: colors.status.warning };
+      return { indicator: statusIndicators.paused, color: colors.status.warning, label: 'Paused' };
     case 'stopped':
-      return { indicator: statusIndicators.stopped, color: colors.fg.muted };
+      return { indicator: statusIndicators.stopped, color: colors.fg.muted, label: 'Stopped' };
     case 'error':
-      return { indicator: statusIndicators.blocked, color: colors.status.error };
+      return { indicator: statusIndicators.blocked, color: colors.status.error, label: 'Error' };
   }
 }
 

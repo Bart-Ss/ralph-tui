@@ -521,3 +521,34 @@ Started: Sun 11 Jan 10:55:32 GMT 2026
   - Tracking completedIterations separately from iterations array allows for accurate ETA math
   - Nested ProgressBar components keep the main component clean and reusable
 ---
+
+## 2026-01-11 - ralph-tui-45r.17
+- What was implemented:
+  - US-017: Pause and Resume with full acceptance criteria
+  - Added 'pausing' status to EngineStatus type to distinguish "pause requested" from "actually paused"
+  - Engine runLoop now properly waits when paused instead of continuing immediately
+  - Press 'p' to request pause - shows "Pausing after current iteration..." status
+  - Engine transitions to 'paused' state after current iteration completes
+  - Press 'p' again while pausing to cancel the pause request
+  - Press 'p' while paused to resume execution
+  - Paused state is persisted to .ralph-tui-session.json via pauseSession() function
+  - Sessions with 'paused' status are resumable with `ralph-tui resume`
+  - User can quit while paused and resume later with the resume command
+  - Updated Header, ProgressDashboard, and RunApp components to display pausing/paused states
+  - Added '◎' indicator for 'pausing' status, '⏸' for 'paused' status
+- Files changed:
+  - src/engine/types.ts (updated) - Added 'pausing' to EngineStatus type with documentation
+  - src/engine/index.ts (updated) - Enhanced runLoop with pause check and wait loop, updated pause()/resume() methods, added isPaused()/isPausing() helpers
+  - src/tui/theme.ts (updated) - Added 'pausing' to RalphStatus type, added pausing indicator
+  - src/tui/components/Header.tsx (updated) - Added 'pausing' case to getStatusDisplay()
+  - src/tui/components/ProgressDashboard.tsx (updated) - Added 'pausing' case with "Pausing after current iteration..." label
+  - src/tui/components/RunApp.tsx (updated) - Enhanced keyboard handler for pause toggle, added pausing status mapping
+  - src/commands/run.tsx (updated) - Added pause/resume event handlers for state persistence
+  - src/commands/resume.tsx (updated) - Enhanced to handle paused state persistence and proper cleanup
+- **Learnings:**
+  - Two-stage pause (pausing → paused) provides better UX than immediate pause during long operations
+  - The engine loop checks pause state at the top of each iteration, not in the middle
+  - Pressing 'p' twice quickly cancels a pending pause - useful if user changes their mind
+  - Session persistence uses isPaused flag and pausedAt timestamp for resumable state
+  - Events (engine:paused, engine:resumed) drive both TUI updates and state persistence
+---

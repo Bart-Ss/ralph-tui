@@ -285,8 +285,13 @@ export type EngineEventListener = (event: EngineEvent) => void;
 
 /**
  * Engine status
+ * - 'idle': Not running
+ * - 'running': Executing iterations
+ * - 'pausing': Pause requested, waiting for current iteration to complete
+ * - 'paused': Paused, waiting to resume
+ * - 'stopping': Stop requested, shutting down
  */
-export type EngineStatus = 'idle' | 'running' | 'paused' | 'stopping';
+export type EngineStatus = 'idle' | 'running' | 'pausing' | 'paused' | 'stopping';
 
 /**
  * Engine state snapshot

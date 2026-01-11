@@ -57,6 +57,7 @@ export const colors = {
 /**
  * Status indicator symbols
  * Task status: ✓ (done), ▶ (active), ○ (pending), ⊘ (blocked)
+ * Ralph status: ▶ (running), ◎ (pausing), ⏸ (paused), ■ (stopped)
  */
 export const statusIndicators = {
   done: '✓',
@@ -64,6 +65,7 @@ export const statusIndicators = {
   pending: '○',
   blocked: '⊘',
   running: '▶',
+  pausing: '◎',
   paused: '⏸',
   stopped: '■',
 } as const;
@@ -105,8 +107,13 @@ export const layout = {
 
 /**
  * Ralph status types
+ * - 'running': Actively executing iterations
+ * - 'pausing': Pause requested, waiting for current iteration to complete
+ * - 'paused': Paused, waiting to resume
+ * - 'stopped': Not running
+ * - 'error': Stopped due to error
  */
-export type RalphStatus = 'running' | 'paused' | 'stopped' | 'error';
+export type RalphStatus = 'running' | 'pausing' | 'paused' | 'stopped' | 'error';
 
 /**
  * Task status types matching the acceptance criteria

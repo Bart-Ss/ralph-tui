@@ -196,6 +196,33 @@ export class ExecutionEngine {
    */
   private async runLoop(): Promise<void> {
     while (!this.shouldStop) {
+      // Check if pausing - if so, transition to paused and wait
+      if (this.state.status === 'pausing') {
+        this.state.status = 'paused';
+        this.emit({
+          type: 'engine:paused',
+          timestamp: new Date().toISOString(),
+          currentIteration: this.state.currentIteration,
+        });
+
+        // Wait until resumed
+        while (this.state.status === 'paused' && !this.shouldStop) {
+          await this.delay(100); // Poll every 100ms
+        }
+
+        // If we were stopped while paused, exit the loop
+        if (this.shouldStop) {
+          break;
+        }
+
+        // Emit resumed event and continue
+        this.emit({
+          type: 'engine:resumed',
+          timestamp: new Date().toISOString(),
+          fromIteration: this.state.currentIteration,
+        });
+      }
+
       // Check max iterations
       if (
         this.config.maxIterations > 0 &&
@@ -625,35 +652,51 @@ export class ExecutionEngine {
   }
 
   /**
-   * Pause the execution loop
+   * Request to pause the execution loop after the current iteration completes.
+   * If already pausing or paused, this is a no-op.
    */
   pause(): void {
     if (this.state.status !== 'running') {
       return;
     }
 
-    this.state.status = 'paused';
-    this.emit({
-      type: 'engine:paused',
-      timestamp: new Date().toISOString(),
-      currentIteration: this.state.currentIteration,
-    });
+    // Set to 'pausing' - the loop will transition to 'paused' after the current iteration
+    this.state.status = 'pausing';
+    // Note: We don't emit engine:paused here. That happens in runLoop when we actually pause.
   }
 
   /**
-   * Resume the execution loop
+   * Resume the execution loop from a paused state.
+   * This can also be used to cancel a pending pause (when status is 'pausing').
    */
   resume(): void {
+    if (this.state.status === 'pausing') {
+      // Cancel the pending pause - just go back to running
+      this.state.status = 'running';
+      return;
+    }
+
     if (this.state.status !== 'paused') {
       return;
     }
 
+    // Resume from paused state - the runLoop will detect this and continue
     this.state.status = 'running';
-    this.emit({
-      type: 'engine:resumed',
-      timestamp: new Date().toISOString(),
-      fromIteration: this.state.currentIteration,
-    });
+    // Note: engine:resumed event is emitted in runLoop when we actually resume
+  }
+
+  /**
+   * Check if the engine is pausing or paused
+   */
+  isPaused(): boolean {
+    return this.state.status === 'paused';
+  }
+
+  /**
+   * Check if the engine is in the process of pausing
+   */
+  isPausing(): boolean {
+    return this.state.status === 'pausing';
   }
 
   /**

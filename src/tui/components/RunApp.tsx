@@ -53,6 +53,8 @@ function engineStatusToRalphStatus(
   switch (engineStatus) {
     case 'running':
       return 'running';
+    case 'pausing':
+      return 'pausing';
     case 'paused':
       return 'paused';
     case 'stopping':
@@ -269,10 +271,19 @@ export function RunApp({ engine, onQuit, onTaskDrillDown, onIterationDrillDown }
 
         case 'p':
           // Toggle pause/resume
+          // When running, pause will transition to pausing, then to paused
+          // When pausing, pressing p again will cancel the pause request
+          // When paused, resume will transition back to running
           if (status === 'running') {
             engine.pause();
+            setStatus('pausing');
+          } else if (status === 'pausing') {
+            // Cancel pause request
+            engine.resume();
+            setStatus('running');
           } else if (status === 'paused') {
             engine.resume();
+            // Status will update via engine event
           }
           break;
 

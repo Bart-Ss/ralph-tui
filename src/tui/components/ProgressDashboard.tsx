@@ -40,6 +40,8 @@ function getStatusDisplay(status: RalphStatus): { label: string; color: string; 
   switch (status) {
     case 'running':
       return { label: 'Running', color: colors.status.success, indicator: statusIndicators.running };
+    case 'pausing':
+      return { label: 'Pausing after current iteration...', color: colors.status.warning, indicator: statusIndicators.pausing };
     case 'paused':
       return { label: 'Paused', color: colors.status.warning, indicator: statusIndicators.paused };
     case 'stopped':
