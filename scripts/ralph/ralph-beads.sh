@@ -1,6 +1,7 @@
 #!/bin/bash
 # Ralph Wiggum - Long-running AI agent loop using Beads + bv/bd
-# Usage: ./ralph-beads.sh [max_iterations] [--epic EPIC_ID] [--cli opencode|claude] [--model MODEL]
+# Usage: ./ralph-beads.sh [--epic EPIC_ID] [--cli opencode|claude] [--model MODEL] [max_iterations]
+#        max_iterations must be a number if provided as positional arg (default: 10)
 #
 # Uses bv for smart task selection when available.
 # Falls back to bd-only mode if bv is not installed.
@@ -8,8 +9,12 @@
 
 set -e
 
-MAX_ITERATIONS=${1:-10}
-shift
+MAX_ITERATIONS=10
+# Only consume first arg as max_iterations if it's a number
+if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+    MAX_ITERATIONS="$1"
+    shift
+fi
 PROGRESS_FILE="scripts/ralph/progress.txt"
 PROMPT_FILE="scripts/ralph/prompt-beads.md"
 ARCHIVE_DIR="scripts/ralph/archive"
@@ -109,51 +114,51 @@ get_epic() {
 }
 
 # Get next bead within epic (dependency-aware)
+# Arg 1: Epic ID (not bd show output)
 get_next_bead_in_epic() {
-    local EPIC="$1"
-    local EPIC_ID=$(echo "$EPIC" | grep "^[^:]*:" | head -1 | cut -d: -f1 | tr -d ' ')
-    
+    local EPIC_ID="$1"
+
     if [ -z "$EPIC_ID" ]; then
         return 1
     fi
-    
+
     if [ "$BV_AVAILABLE" = true ]; then
-        bv --robot-next --format json --label-filter "ralph" 2>/dev/null | jq --arg EPIC "$EPIC_ID" '
-            select(.id | startswith("devtuneai-")) |
+        # bv --robot-next returns the single best task to work on
+        # Filter to children of this epic (IDs starting with EPIC_ID.)
+        bv --robot-next 2>/dev/null | jq --arg EPIC "$EPIC_ID" '
+            select(.id | startswith($EPIC + ".")) |
             {
                 id: .id,
                 title: .title,
                 score: .score,
-                reasons: (.reasons // ["Priority: " + (.priority | tostring)]),
+                reasons: (.reasons // []),
                 epic: $EPIC
             }
-        ' | head -1
-    else
-        bd list --parent="$EPIC_ID" --status=open --format json 2>/dev/null | jq -r '
-            sort_by(.priority) | reverse | .[0] |
-            {
-                id: .id,
-                title: .title,
-                score: (.priority * 0.1),
-                reasons: ["Priority: " + (.priority | tostring), "Status: open"],
-                epic: $EPIC_ID
-            }
         '
+    else
+        # Fallback: parse bd list output (no JSON support)
+        # Get first open child bead by priority
+        local FIRST_CHILD=$(bd list --parent="$EPIC_ID" --status=open 2>/dev/null | head -1)
+        if [ -n "$FIRST_CHILD" ]; then
+            # Parse: "○ ID [● P1] [type] [labels] - Title"
+            local CHILD_ID=$(echo "$FIRST_CHILD" | sed 's/^[^a-z]*//' | cut -d' ' -f1)
+            local CHILD_TITLE=$(echo "$FIRST_CHILD" | sed 's/.*- //')
+            echo "{\"id\": \"$CHILD_ID\", \"title\": \"$CHILD_TITLE\", \"score\": 0.5, \"reasons\": [\"From bd list\"], \"epic\": \"$EPIC_ID\"}"
+        fi
     fi
 }
 
 # Check if all children of an epic are closed
+# Arg 1: Epic ID (not bd show output)
 are_all_children_closed() {
-    local EPIC="$1"
-    local EPIC_ID=$(echo "$EPIC" | grep "^[^:]*:" | head -1 | cut -d: -f1 | tr -d ' ')
-    
+    local EPIC_ID="$1"
+
     if [ -z "$EPIC_ID" ]; then
         return 1
     fi
-    
-    local CHILDREN=$(bd list --parent="$EPIC_ID" --format json 2>/dev/null)
-    local OPEN_CHILDREN=$(echo "$CHILDREN" | jq '[.[] | select(.status == "open" or .status == null)] | length')
-    
+
+    # bd list --status=open only shows open beads; if none, all are closed
+    local OPEN_CHILDREN=$(bd list --parent="$EPIC_ID" --status=open 2>/dev/null | grep -c "^" || echo "0")
     [ "$OPEN_CHILDREN" = "0" ]
 }
 
@@ -165,14 +170,14 @@ close_bead() {
 }
 
 # Close epic
+# Arg 1: Epic ID (not bd show output)
 close_epic() {
-    local EPIC="$1"
-    local EPIC_ID=$(echo "$EPIC" | grep "^[^:]*:" | head -1 | cut -d: -f1 | tr -d ' ')
-    
+    local EPIC_ID="$1"
+
     if [ -z "$EPIC_ID" ]; then
         return 1
     fi
-    
+
     close_bead "$EPIC_ID" "All child beads completed via Ralph"
     echo ""
     echo "✓ Epic $EPIC_ID closed"
@@ -222,8 +227,20 @@ if [ -z "$EPIC" ]; then
     exit 1
 fi
 
-EPIC_ID=$(echo "$EPIC" | grep "^[^:]*:" | head -1 | cut -d: -f1 | tr -d ' ')
-EPIC_TITLE=$(echo "$EPIC" | head -1 | cut -d: -f2- | sed 's/^ *//')
+# Store user-provided epic ID before it might get overwritten
+USER_EPIC_ID="$EPIC_ID"
+
+# If user provided --epic, use that ID directly (don't re-parse from bd show output)
+if [ -n "$USER_EPIC_ID" ]; then
+    EPIC_ID="$USER_EPIC_ID"
+    # Extract title from bd show output: "○ ID [TYPE] · Title   [● P1 · STATUS]"
+    # Use grep to find the line containing the ID (skips empty lines)
+    EPIC_TITLE=$(echo "$EPIC" | grep "$USER_EPIC_ID" | head -1 | sed 's/^[^·]*· //' | sed 's/  *\[.*$//')
+else
+    # Parse ID from bd show output (auto-detected epic)
+    EPIC_ID=$(echo "$EPIC" | grep "^[^:]*:" | head -1 | cut -d: -f1 | tr -d ' ')
+    EPIC_TITLE=$(echo "$EPIC" | head -1 | cut -d: -f2- | sed 's/^ *//')
+fi
 
 echo "Working on epic: $EPIC_ID"
 echo "Title: $EPIC_TITLE"
@@ -238,8 +255,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo "═══════════════════════════════════════════════════════"
     
     # Check if all children are done
-    if are_all_children_closed "$EPIC"; then
-        close_epic "$EPIC"
+    if are_all_children_closed "$EPIC_ID"; then
+        close_epic "$EPIC_ID"
         echo ""
         echo "Ralph completed epic: $EPIC_ID"
         echo "<promise>COMPLETE</promise>"
@@ -247,7 +264,7 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     fi
     
     # Get next bead in this epic
-    NEXT_BEAD_JSON=$(get_next_bead_in_epic "$EPIC")
+    NEXT_BEAD_JSON=$(get_next_bead_in_epic "$EPIC_ID")
     
     if [ -z "$NEXT_BEAD_JSON" ] || echo "$NEXT_BEAD_JSON" | jq -e '.id' >/dev/null 2>&1; then
         BEAD_ID=$(echo "$NEXT_BEAD_JSON" | jq -r '.id')
@@ -256,8 +273,8 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     else
         echo ""
         echo "No more beads in epic $EPIC_ID"
-        if are_all_children_closed "$EPIC"; then
-            close_epic "$EPIC"
+        if are_all_children_closed "$EPIC_ID"; then
+            close_epic "$EPIC_ID"
             echo "Ralph completed epic: $EPIC_ID"
             echo "<promise>COMPLETE</promise>"
             exit 0
@@ -265,12 +282,12 @@ for i in $(seq 1 $MAX_ITERATIONS); do
         echo "Check status manually."
         exit 1
     fi
-    
+
     if [ -z "$BEAD_ID" ] || [ "$BEAD_ID" = "null" ]; then
         echo ""
         echo "No more beads in epic $EPIC_ID"
-        if are_all_children_closed "$EPIC"; then
-            close_epic "$EPIC"
+        if are_all_children_closed "$EPIC_ID"; then
+            close_epic "$EPIC_ID"
             echo "Ralph completed epic: $EPIC_ID"
             echo "<promise>COMPLETE</promise>"
             exit 0
@@ -323,8 +340,8 @@ EOF
     rm -f "$TEMP_BEAD" "$TEMP_PROMPT"
     
     # Check if bead was closed by agent
-    BEAD_STATUS=$(bd show "$BEAD_ID" 2>/dev/null | grep -c "Status: closed" || echo "0")
-    if [ "$BEAD_STATUS" -gt 0 ]; then
+    # Look for "CLOSED" in the status indicator: [● P1 · CLOSED]
+    if bd show "$BEAD_ID" 2>/dev/null | grep -q "CLOSED"; then
         echo ""
         echo "✓ Bead $BEAD_ID closed"
     else
