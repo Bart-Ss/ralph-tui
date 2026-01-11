@@ -17,6 +17,7 @@ import {
   executeSetupCommand,
   executeLogsCommand,
   executeTemplateCommand,
+  executeInitCommand,
 } from './commands/index.js';
 
 /**
@@ -30,6 +31,7 @@ Usage: ralph-tui [command] [options]
 
 Commands:
   (none)              Launch the interactive TUI
+  init [options]      Create a new PRD interactively
   run [options]       Start Ralph execution
   resume [options]    Resume an interrupted session
   status              Check session status
@@ -60,6 +62,7 @@ Resume Options:
 
 Examples:
   ralph-tui                              # Start the TUI
+  ralph-tui init                         # Create a new PRD interactively
   ralph-tui run                          # Start execution with defaults
   ralph-tui run --epic myproject-epic    # Run with specific epic
   ralph-tui run --prd ./prd.json         # Run with PRD file
@@ -86,6 +89,12 @@ async function handleSubcommand(args: string[]): Promise<boolean> {
   // Help command
   if (command === 'help' || command === '--help' || command === '-h') {
     showHelp();
+    return true;
+  }
+
+  // Init command
+  if (command === 'init') {
+    await executeInitCommand(args.slice(1));
     return true;
   }
 

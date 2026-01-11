@@ -48,3 +48,9 @@ export {
 export {
   executeTemplateCommand,
 } from './template.js';
+
+export {
+  executeInitCommand,
+  parseInitArgs,
+  printInitHelp,
+} from './init.js';
