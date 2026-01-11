@@ -470,3 +470,28 @@ Started: Sun 11 Jan 10:55:32 GMT 2026
   - View mode toggle pattern with detailTask state allows full-screen detail views
   - Separating q (quit) and Escape (back) provides better UX for drill-down navigation
 ---
+
+## 2026-01-11 - ralph-tui-45r.15
+- What was implemented:
+  - US-015: Iteration Detail View with full acceptance criteria
+  - IterationDetailView component with comprehensive iteration details display
+  - Iteration header showing number, status indicator, and "X of Y" format
+  - Task info section with ID and title
+  - Metadata section: status, start time, end time, duration, task completion, promise detection
+  - Events timeline with timestamped key events (started, agent running, task completed, etc.)
+  - Color-coded event symbols matching the theme
+  - Scrollable agent output with syntax highlighting for code blocks
+  - Code blocks displayed in boxed containers with language labels
+  - Persisted output file path display
+  - Esc key navigation to return to iteration list
+  - View mode toggle integrated with RunApp (tasks ↔ iterations ↔ detail views)
+- Files changed:
+  - src/tui/components/IterationDetailView.tsx (new) - Full iteration detail display
+  - src/tui/components/RunApp.tsx (updated) - View mode toggle and keyboard handling
+  - src/tui/components/index.ts (updated) - Export IterationDetailView
+- **Learnings:**
+  - Code block syntax highlighting can be done by detecting ``` markers and rendering in different styles
+  - Timeline events are built from IterationResult data - start/agent/task completion/end events
+  - The iteration-detail view follows the same pattern as task-detail: full-screen scrollbox with Esc to return
+  - OpenTUI scrollbox handles large content well for potentially large agent outputs
+---
