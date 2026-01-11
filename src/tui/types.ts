@@ -59,6 +59,8 @@ export interface TaskItem {
   createdAt?: string;
   /** Last update timestamp (ISO 8601) */
   updatedAt?: string;
+  /** Parent task/epic ID for hierarchical display */
+  parentId?: string;
 }
 
 /**

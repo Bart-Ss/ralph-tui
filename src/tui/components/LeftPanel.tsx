@@ -19,27 +19,35 @@ function truncateText(text: string, maxWidth: number): string {
 
 /**
  * Single task item row
- * Shows: [status indicator] [task ID] [task title (truncated)]
+ * Shows: [indent][status indicator] [task ID] [task title (truncated)]
  * Closed tasks are displayed with greyed-out styling to distinguish historical work
+ * Child tasks (those with a parentId) are indented to show hierarchy
  */
 function TaskRow({
   task,
   isSelected,
   maxWidth,
+  indentLevel = 0,
 }: {
   task: TaskItem;
   isSelected: boolean;
   /** Maximum width for the entire row content (for truncation) */
   maxWidth: number;
+  /** Indentation level (0 = epic/root, 1 = child of epic) */
+  indentLevel?: number;
 }): ReactNode {
   const statusColor = getTaskStatusColor(task.status);
   const statusIndicator = getTaskStatusIndicator(task.status);
   const isClosed = task.status === 'closed';
 
-  // Format: "✓ task-id title"
-  // Calculate available width: maxWidth - indicator(1) - space(1) - id - space(1)
+  // Indentation: 2 spaces per level
+  const indent = '  '.repeat(indentLevel);
+
+  // Format: "[indent]✓ task-id title"
+  // Calculate available width: maxWidth - indent - indicator(1) - space(1) - id - space(1)
   const idDisplay = task.id;
-  const titleWidth = maxWidth - 3 - idDisplay.length;
+  const indentWidth = indentLevel * 2;
+  const titleWidth = maxWidth - indentWidth - 3 - idDisplay.length;
   const truncatedTitle = truncateText(task.title, Math.max(5, titleWidth));
 
   // Greyed-out colors for closed tasks
@@ -61,6 +69,7 @@ function TaskRow({
       }}
     >
       <text>
+        <span fg={colors.fg.dim}>{indent}</span>
         <span fg={statusColor}>{statusIndicator}</span>
         <span fg={idColor}> {idDisplay}</span>
         <span fg={titleColor}> {truncatedTitle}</span>
@@ -70,11 +79,36 @@ function TaskRow({
 }
 
 /**
+ * Build a map of parent IDs to determine indentation levels.
+ * Tasks with a parentId that exists in the task list are indented.
+ */
+function buildIndentMap(tasks: TaskItem[]): Map<string, number> {
+  // Create a set of all task IDs for quick lookup
+  const taskIds = new Set(tasks.map((t) => t.id));
+  const indentMap = new Map<string, number>();
+
+  for (const task of tasks) {
+    // If task has a parent that exists in our list, it's indented
+    if (task.parentId && taskIds.has(task.parentId)) {
+      indentMap.set(task.id, 1);
+    } else {
+      indentMap.set(task.id, 0);
+    }
+  }
+
+  return indentMap;
+}
+
+/**
  * LeftPanel component showing the scrollable task list
+ * Displays tasks with hierarchical indentation based on parent/child relationships
  */
 export function LeftPanel({ tasks, selectedIndex, width = 45 }: LeftPanelProps & { width?: number }): ReactNode {
   // Calculate max width for task row content (panel width minus padding and border)
   const maxRowWidth = Math.max(20, width - 4);
+
+  // Build indentation map for hierarchical display
+  const indentMap = buildIndentMap(tasks);
 
   return (
     <box
@@ -107,6 +141,7 @@ export function LeftPanel({ tasks, selectedIndex, width = 45 }: LeftPanelProps &
               task={task}
               isSelected={index === selectedIndex}
               maxWidth={maxRowWidth}
+              indentLevel={indentMap.get(task.id) ?? 0}
             />
           ))
         )}

@@ -95,6 +95,7 @@ function trackerTaskToTaskItem(task: TrackerTask): TaskItem {
     assignee: task.assignee,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
+    parentId: task.parentId,
   };
 }
 
