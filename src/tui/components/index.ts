@@ -5,6 +5,8 @@
 
 export { App } from './App.js';
 export type { AppProps } from './App.js';
+export { RunApp } from './RunApp.js';
+export type { RunAppProps } from './RunApp.js';
 export { Header } from './Header.js';
 export { Footer } from './Footer.js';
 export { LeftPanel } from './LeftPanel.js';

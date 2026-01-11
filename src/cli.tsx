@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 /**
  * ABOUTME: CLI entry point for the Ralph TUI application.
- * Handles subcommands (plugins, etc.) and launches the TUI when no subcommand given.
+ * Handles subcommands (plugins, run, etc.) and launches the TUI when no subcommand given.
  */
 
 import { createCliRenderer } from '@opentui/core';
 import { createRoot } from '@opentui/react';
 import { App } from './tui/index.js';
-import { printTrackerPlugins, printAgentPlugins } from './commands/index.js';
+import {
+  printTrackerPlugins,
+  printAgentPlugins,
+  executeRunCommand,
+} from './commands/index.js';
 
 /**
  * Show CLI help message.
@@ -16,18 +20,33 @@ function showHelp(): void {
   console.log(`
 Ralph TUI - AI Agent Loop Orchestrator
 
-Usage: ralph-tui [command]
+Usage: ralph-tui [command] [options]
 
 Commands:
   (none)              Launch the interactive TUI
+  run [options]       Start Ralph execution
   plugins agents      List available agent plugins
   plugins trackers    List available tracker plugins
   help, --help, -h    Show this help message
 
+Run Options:
+  --epic <id>         Epic ID for beads tracker
+  --prd <path>        PRD file path for json tracker
+  --agent <name>      Override agent plugin (e.g., claude, opencode)
+  --model <name>      Override model (e.g., opus, sonnet)
+  --tracker <name>    Override tracker plugin (e.g., beads, beads-bv, json)
+  --iterations <n>    Maximum iterations (0 = unlimited)
+  --resume            Resume existing session
+  --headless          Run without TUI
+
 Examples:
-  ralph-tui                  # Start the TUI
-  ralph-tui plugins agents   # List agent plugins
-  ralph-tui plugins trackers # List tracker plugins
+  ralph-tui                              # Start the TUI
+  ralph-tui run                          # Start execution with defaults
+  ralph-tui run --epic myproject-epic    # Run with specific epic
+  ralph-tui run --prd ./prd.json         # Run with PRD file
+  ralph-tui run --agent claude --model opus
+  ralph-tui plugins agents               # List agent plugins
+  ralph-tui plugins trackers             # List tracker plugins
 `);
 }
 
@@ -41,6 +60,12 @@ async function handleSubcommand(args: string[]): Promise<boolean> {
   // Help command
   if (command === 'help' || command === '--help' || command === '-h') {
     showHelp();
+    return true;
+  }
+
+  // Run command
+  if (command === 'run') {
+    await executeRunCommand(args.slice(1));
     return true;
   }
 

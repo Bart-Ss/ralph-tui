@@ -9,3 +9,9 @@ export {
   listAgentPlugins,
   printAgentPlugins,
 } from './plugins.js';
+
+export {
+  executeRunCommand,
+  parseRunArgs,
+  printRunHelp,
+} from './run.jsx';

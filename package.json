@@ -53,6 +53,7 @@
   },
   "dependencies": {
     "@opentui/core": "^0.1.72",
-    "@opentui/react": "^0.1.72"
+    "@opentui/react": "^0.1.72",
+    "yaml": "^2.8.2"
   }
 }
