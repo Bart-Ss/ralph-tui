@@ -76,7 +76,7 @@ export const docsNavigation: NavItem[] = [
   {
     title: 'Prompt Templates',
     items: [
-      { title: 'Overview', href: '/docs/templates' },
+      { title: 'Overview', href: '/docs/templates/overview' },
       { title: 'Customization', href: '/docs/templates/customization' },
       { title: 'Handlebars Reference', href: '/docs/templates/handlebars' },
     ],
