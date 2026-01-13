@@ -2,9 +2,11 @@
  * ABOUTME: Desktop notification module for ralph-tui.
  * Provides cross-platform desktop notifications using node-notifier.
  * Notifications are used to alert users when long-running tasks complete.
+ * Also provides configuration resolution for notification settings.
  */
 
 import notifier from 'node-notifier';
+import type { NotificationsConfig } from './config/types.js';
 
 /**
  * Options for sending a desktop notification.
@@ -51,4 +53,34 @@ export function sendNotification(options: NotificationOptions): void {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[notifications] Failed to send notification: ${message}`);
   }
+}
+
+/**
+ * Resolves the final notification enabled state from config and CLI args.
+ *
+ * Priority (highest to lowest):
+ * 1. CLI flag (--notify or --no-notify)
+ * 2. Config file (notifications.enabled)
+ * 3. Default (true)
+ *
+ * @param config - The notifications config from the config file (may be undefined)
+ * @param cliNotify - The CLI flag value (undefined if not specified, true for --notify, false for --no-notify)
+ * @returns Whether notifications should be enabled
+ */
+export function resolveNotificationsEnabled(
+  config?: NotificationsConfig,
+  cliNotify?: boolean
+): boolean {
+  // CLI flag takes highest priority
+  if (cliNotify !== undefined) {
+    return cliNotify;
+  }
+
+  // Config file takes second priority
+  if (config?.enabled !== undefined) {
+    return config.enabled;
+  }
+
+  // Default to enabled
+  return true;
 }

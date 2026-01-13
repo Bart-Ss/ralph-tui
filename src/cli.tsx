@@ -57,6 +57,8 @@ Run Options:
   --headless          Run without TUI (alias: --no-tui)
   --no-tui            Run without TUI, output structured logs to stdout
   --no-setup          Skip interactive setup even if no config exists
+  --notify            Force enable desktop notifications
+  --no-notify         Force disable desktop notifications
 
 Resume Options:
   --cwd <path>        Working directory

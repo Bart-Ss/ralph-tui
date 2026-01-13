@@ -171,6 +171,14 @@ export function parseRunArgs(args: string[]): ExtendedRuntimeOptions {
           i++;
         }
         break;
+
+      case '--notify':
+        options.notify = true;
+        break;
+
+      case '--no-notify':
+        options.notify = false;
+        break;
     }
   }
 
@@ -203,6 +211,8 @@ Options:
   --headless          Run without TUI (alias: --no-tui)
   --no-tui            Run without TUI, output structured logs to stdout
   --no-setup          Skip interactive setup even if no config exists
+  --notify            Force enable desktop notifications
+  --no-notify         Force disable desktop notifications
 
 Log Output Format (--no-tui mode):
   [timestamp] [level] [component] message
