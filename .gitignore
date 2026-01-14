@@ -47,3 +47,4 @@ Thumbs.db
 
 # Ralph TUI runtime (all user-specific state)
 .ralph-tui/
+.envrc
