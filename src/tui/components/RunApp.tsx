@@ -819,10 +819,10 @@ export function RunApp({
           // Add 10 iterations to maxIterations (extends the session without stopping)
           // Handle both '+' (key.name) and Shift+= (key.sequence === '+')
           if ((key.name === '+' || key.sequence === '+') &&
-              (status === 'ready' || status === 'running' || status === 'paused' || status === 'stopped' || status === 'idle')) {
+              (status === 'ready' || status === 'running' || status === 'executing' || status === 'paused' || status === 'stopped' || status === 'idle' || status === 'complete')) {
             engine.addIterations(10).then((shouldContinue) => {
-              if (shouldContinue) {
-                // Engine was idle (stopped due to max_iterations), restart it
+              if (shouldContinue || status === 'complete') {
+                // Engine was idle (stopped due to max_iterations) or complete - restart it
                 setStatus('running');
                 engine.continueExecution();
               }
@@ -835,7 +835,7 @@ export function RunApp({
 
         case '-':
           // Remove 10 iterations from maxIterations (but not below 1 or current iteration)
-          if (status === 'ready' || status === 'running' || status === 'paused' || status === 'stopped' || status === 'idle') {
+          if (status === 'ready' || status === 'running' || status === 'executing' || status === 'paused' || status === 'stopped' || status === 'idle' || status === 'complete') {
             engine.removeIterations(10).catch((err) => {
               // Surface iteration removal errors to user
               console.error('Failed to remove iterations:', err);
