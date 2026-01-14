@@ -92,13 +92,7 @@ function H2({ children, id, ...props }: React.HTMLAttributes<HTMLHeadingElement>
       ].join(' ')}
       {...props}
     >
-      <span className="flex items-center gap-2">
-        {/* Terminal-style section marker */}
-        <span className="text-accent-primary/60 font-mono text-lg" aria-hidden="true">
-          ##
-        </span>
-        {children}
-      </span>
+      {children}
     </h2>
   );
 }
@@ -115,12 +109,7 @@ function H3({ children, id, ...props }: React.HTMLAttributes<HTMLHeadingElement>
       ].join(' ')}
       {...props}
     >
-      <span className="flex items-center gap-2">
-        <span className="text-accent-secondary/50 font-mono text-base" aria-hidden="true">
-          ###
-        </span>
-        {children}
-      </span>
+      {children}
     </h3>
   );
 }
@@ -168,6 +157,7 @@ function Ul({ children, ...props }: React.HTMLAttributes<HTMLUListElement>) {
     <ul
       className={[
         'my-4 ml-4 space-y-2',
+        'list-none', // Remove default bullets
         // Custom bullet using accent color
         '[&>li]:relative [&>li]:pl-5',
         "[&>li]:before:content-['▸'] [&>li]:before:absolute [&>li]:before:left-0",

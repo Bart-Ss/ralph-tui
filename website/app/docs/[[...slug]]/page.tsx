@@ -143,7 +143,7 @@ export default async function DocPage({ params }: DocPageProps) {
         </header>
 
         {/* MDX content */}
-        <div className="prose prose-invert max-w-none">
+        <div className="prose dark:prose-invert max-w-none">
           {mdxContent}
         </div>
 
