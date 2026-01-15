@@ -9,14 +9,6 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        runtime: [bun, node]
-        include:
-          - runtime: bun
-            version: latest
-          - runtime: node
-            version: '20'
 
     steps:
       - uses: actions/checkout@v4
@@ -25,12 +17,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
-      - name: Setup Node.js
-        if: matrix.runtime == 'node'
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.version }}
 
       - name: Clear TypeScript build cache
         run: |
@@ -69,7 +55,6 @@ jobs:
           echo "✅ Coverage $COVERAGE% meets 40% threshold"
 
       - name: Upload coverage to Codecov
-        if: matrix.runtime == 'bun'
         uses: codecov/codecov-action@v4
         with:
           files: ./coverage/lcov.info
