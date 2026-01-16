@@ -109,6 +109,9 @@ ralph-tui run --iterations 5
 
 # Run headless (no TUI)
 ralph-tui run --headless
+
+# Run agent in isolated sandbox (bwrap/docker)
+ralph-tui run --sandbox
 ```
 
 ### Create PRD Options
