@@ -17,6 +17,7 @@ import { LeftPanel } from './LeftPanel.js';
 import { RightPanel } from './RightPanel.js';
 import { IterationHistoryView } from './IterationHistoryView.js';
 import { IterationDetailView } from './IterationDetailView.js';
+import type { HistoricExecutionContext } from './IterationDetailView.js';
 import { ProgressDashboard } from './ProgressDashboard.js';
 import { ConfirmationDialog } from './ConfirmationDialog.js';
 import { HelpOverlay } from './HelpOverlay.js';
@@ -363,9 +364,9 @@ export function RunApp({
   const [showQuitDialog, setShowQuitDialog] = useState(false);
   // Show/hide closed tasks filter (default: show closed tasks)
   const [showClosedTasks, setShowClosedTasks] = useState(true);
-  // Cache for historical iteration output loaded from disk (taskId -> { output, timing })
+  // Cache for historical iteration output loaded from disk (taskId -> { output, timing, agent, model })
   const [historicalOutputCache, setHistoricalOutputCache] = useState<
-    Map<string, { output: string; timing: IterationTimingInfo }>
+    Map<string, { output: string; timing: IterationTimingInfo; agentPlugin?: string; model?: string }>
   >(() => new Map());
   // Current task info for status display
   const [currentTaskId, setCurrentTaskId] = useState<string | undefined>(undefined);
@@ -403,6 +404,10 @@ export function RunApp({
     SubagentTraceStats | undefined
   >(undefined);
   const [iterationDetailSubagentLoading, setIterationDetailSubagentLoading] = useState(false);
+  // Historic execution context for iteration detail view (loaded from persisted logs)
+  const [iterationDetailHistoricContext, setIterationDetailHistoricContext] = useState<
+    HistoricExecutionContext | undefined
+  >(undefined);
   // Subagent tree panel visibility state (toggled with 'T' key)
   // Tracks subagents even when panel is hidden (subagentTree state continues updating)
   const [subagentPanelVisible, setSubagentPanelVisible] = useState(initialSubagentPanelVisible);
@@ -1031,16 +1036,29 @@ export function RunApp({
   ).length;
   const totalTasks = tasks.length;
 
-  // Get selected task from filtered list
+  // Get selected task from filtered list (used for display in tasks view)
   const selectedTask = displayedTasks[selectedIndex] ?? null;
 
-  // Compute the iteration output and timing to show for the selected task
-  // - If selected task is currently executing: show live currentOutput with isRunning + segments
-  // - If selected task has a completed iteration: show that iteration's output with timing
+  // Get selected iteration when in iterations view
+  const selectedIteration = viewMode === 'iterations' && iterations.length > 0
+    ? iterations[iterationSelectedIndex]
+    : undefined;
+
+  // Unified task ID for data loading - works across both views
+  // In iterations view, use the task ID from the selected iteration
+  // In tasks view, use the task ID from the task list
+  const effectiveTaskId = viewMode === 'iterations'
+    ? selectedIteration?.task?.id
+    : selectedTask?.id;
+
+  // Compute the iteration output and timing to show
+  // Uses effectiveTaskId to ensure correct data is shown in both tasks and iterations views
+  // - If current task is executing: show live currentOutput with isRunning + segments
+  // - If completed iteration exists: show that iteration's output with timing
   // - Otherwise: undefined (will show "waiting" or appropriate message)
   const selectedTaskIteration = useMemo(() => {
-    // If no selected task, check if there's currently executing task and show that
-    if (!selectedTask) {
+    // If no effective task ID, check if there's currently executing task and show that
+    if (!effectiveTaskId) {
       // If there's a current task executing, show its output even if no task selected
       if (currentTaskId) {
         const timing: IterationTimingInfo = {
@@ -1053,8 +1071,13 @@ export function RunApp({
     }
 
     // Check if this task is currently being executed
-    // Use both ID match AND status check for robustness against state timing issues
-    const isExecuting = currentTaskId === selectedTask.id || selectedTask.status === 'active';
+    // Derive active status from the effective task (iterations view uses selectedIteration.task,
+    // tasks view uses selectedTask) to avoid showing wrong output
+    const effectiveTaskStatus = viewMode === 'iterations'
+      ? selectedIteration?.task?.status
+      : selectedTask?.status;
+    const isActiveTask = effectiveTaskStatus === 'active' || effectiveTaskStatus === 'in_progress';
+    const isExecuting = currentTaskId === effectiveTaskId || isActiveTask;
     if (isExecuting && currentTaskId) {
       // Use the captured start time from the iteration:started event
       const timing: IterationTimingInfo = {
@@ -1065,7 +1088,7 @@ export function RunApp({
     }
 
     // Look for a completed iteration for this task (in-memory from current session)
-    const taskIteration = iterations.find((iter) => iter.task.id === selectedTask.id);
+    const taskIteration = iterations.find((iter) => iter.task.id === effectiveTaskId);
     if (taskIteration) {
       const timing: IterationTimingInfo = {
         startedAt: taskIteration.startedAt,
@@ -1082,7 +1105,7 @@ export function RunApp({
     }
 
     // Check historical output cache (loaded from disk)
-    const historicalData = historicalOutputCache.get(selectedTask.id);
+    const historicalData = historicalOutputCache.get(effectiveTaskId);
     if (historicalData !== undefined) {
       return {
         iteration: -1, // Historical iteration number unknown, use -1 to indicate "past"
@@ -1094,21 +1117,52 @@ export function RunApp({
 
     // Task hasn't been run yet (or historical log not yet loaded)
     return { iteration: 0, output: undefined, segments: undefined, timing: undefined };
-  }, [selectedTask, currentTaskId, currentIteration, currentOutput, currentSegments, iterations, historicalOutputCache]);
+  }, [effectiveTaskId, selectedTask, selectedIteration, viewMode, currentTaskId, currentIteration, currentOutput, currentSegments, iterations, historicalOutputCache, currentIterationStartedAt]);
+
+  // Compute historic agent/model for display when viewing completed iterations
+  // Falls back to current values if viewing a live iteration or no historic data available
+  // Uses effectiveTaskId which is unified across tasks and iterations views
+  const displayAgentInfo = useMemo(() => {
+    // If this is the currently executing task, use current agent/model
+    if (effectiveTaskId && currentTaskId === effectiveTaskId) {
+      return { agent: displayAgentName, model: currentModel };
+    }
+
+    // If viewing a running iteration, use current values
+    if (selectedIteration?.status === 'running') {
+      return { agent: displayAgentName, model: currentModel };
+    }
+
+    // For completed tasks/iterations, check historical cache using the unified task ID
+    if (effectiveTaskId && historicalOutputCache.has(effectiveTaskId)) {
+      const cachedData = historicalOutputCache.get(effectiveTaskId);
+      if (cachedData?.agentPlugin || cachedData?.model) {
+        return { agent: cachedData.agentPlugin, model: cachedData.model };
+      }
+    }
+
+    // Fall back to current values
+    return { agent: displayAgentName, model: currentModel };
+  }, [effectiveTaskId, selectedIteration, currentTaskId, displayAgentName, currentModel, historicalOutputCache]);
 
   // Load historical iteration logs from disk when a completed task is selected
+  // or when viewing iterations history
   useEffect(() => {
-    if (!selectedTask) return;
-    if (!cwd) return;
+    if (!cwd || !effectiveTaskId) return;
 
-    // Only load if task is done/closed and not already in cache or in-memory iterations
-    const isCompleted = selectedTask.status === 'done' || selectedTask.status === 'closed';
-    const hasInMemory = iterations.some((iter) => iter.task.id === selectedTask.id);
-    const hasInCache = historicalOutputCache.has(selectedTask.id);
+    // Check if we should load historical data
+    // Don't load for running iterations or active tasks
+    const isRunning = selectedIteration?.status === 'running';
+    const isActiveTask = selectedTask?.status === 'active';
+    if (isRunning || isActiveTask) return;
 
-    if (isCompleted && !hasInMemory && !hasInCache) {
+    // Check if already in cache
+    const hasInCache = historicalOutputCache.has(effectiveTaskId);
+
+    if (!hasInCache) {
       // Load from disk asynchronously
-      getIterationLogsByTask(cwd, selectedTask.id).then((logs) => {
+      const taskId = effectiveTaskId;
+      getIterationLogsByTask(cwd, taskId).then((logs) => {
         if (logs.length > 0) {
           // Use the most recent log (last one)
           const mostRecent = logs[logs.length - 1];
@@ -1120,28 +1174,34 @@ export function RunApp({
           };
           setHistoricalOutputCache((prev) => {
             const next = new Map(prev);
-            next.set(selectedTask.id, { output: mostRecent.stdout, timing });
+            next.set(taskId, {
+              output: mostRecent.stdout,
+              timing,
+              agentPlugin: mostRecent.metadata.agentPlugin,
+              model: mostRecent.metadata.model,
+            });
             return next;
           });
         } else {
           // No logs found - mark as empty output with no timing to avoid repeated lookups
           setHistoricalOutputCache((prev) => {
             const next = new Map(prev);
-            next.set(selectedTask.id, { output: '', timing: {} });
+            next.set(taskId, { output: '', timing: {} });
             return next;
           });
         }
       });
     }
-  }, [selectedTask, cwd, iterations, historicalOutputCache]);
+  }, [effectiveTaskId, selectedTask, selectedIteration, cwd, historicalOutputCache]);
 
-  // Lazy load subagent trace data when viewing iteration details
+  // Lazy load subagent trace data and historic context when viewing iteration details
   useEffect(() => {
     if (viewMode !== 'iteration-detail' || !detailIteration || !cwd) {
       // Clear data when not in detail view
       setIterationDetailSubagentTree(undefined);
       setIterationDetailSubagentStats(undefined);
       setIterationDetailSubagentLoading(false);
+      setIterationDetailHistoricContext(undefined);
       return;
     }
 
@@ -1158,24 +1218,42 @@ export function RunApp({
     getIterationLogsByTask(cwd, detailIteration.task.id).then(async (logs) => {
       // Find the log matching this iteration number
       const log = logs.find((l) => l.metadata.iteration === detailIteration.iteration);
-      if (log && log.subagentTrace) {
-        setIterationDetailSubagentTree(log.subagentTrace.hierarchy);
-        setIterationDetailSubagentStats(log.subagentTrace.stats);
-        // Cache the stats for the history view
-        setSubagentStatsCache((prev) => {
-          const next = new Map(prev);
-          next.set(detailIteration.iteration, log.subagentTrace!.stats);
-          return next;
-        });
+      if (log) {
+        // Extract historic execution context from metadata
+        const historicContext: HistoricExecutionContext = {
+          agentPlugin: log.metadata.agentPlugin,
+          model: log.metadata.model,
+          sandboxMode: log.metadata.sandboxMode,
+          resolvedSandboxMode: log.metadata.resolvedSandboxMode,
+          sandboxNetwork: log.metadata.sandboxNetwork,
+        };
+        setIterationDetailHistoricContext(historicContext);
+
+        // Extract subagent trace data if available
+        if (log.subagentTrace) {
+          setIterationDetailSubagentTree(log.subagentTrace.hierarchy);
+          setIterationDetailSubagentStats(log.subagentTrace.stats);
+          // Cache the stats for the history view
+          setSubagentStatsCache((prev) => {
+            const next = new Map(prev);
+            next.set(detailIteration.iteration, log.subagentTrace!.stats);
+            return next;
+          });
+        } else {
+          setIterationDetailSubagentTree(undefined);
+          setIterationDetailSubagentStats(undefined);
+        }
       } else {
         setIterationDetailSubagentTree(undefined);
         setIterationDetailSubagentStats(undefined);
+        setIterationDetailHistoricContext(undefined);
       }
       setIterationDetailSubagentLoading(false);
     }).catch(() => {
       setIterationDetailSubagentLoading(false);
       setIterationDetailSubagentTree(undefined);
       setIterationDetailSubagentStats(undefined);
+      setIterationDetailHistoricContext(undefined);
     });
   }, [viewMode, detailIteration, cwd, subagentStatsCache]);
 
@@ -1283,6 +1361,7 @@ export function RunApp({
             subagentTraceLoading={iterationDetailSubagentLoading}
             sandboxConfig={sandboxConfig}
             resolvedSandboxMode={resolvedSandboxMode}
+            historicContext={iterationDetailHistoricContext}
           />
         ) : viewMode === 'tasks' ? (
           <>
@@ -1294,8 +1373,8 @@ export function RunApp({
               iterationSegments={selectedTaskIteration.segments}
               viewMode={detailsViewMode}
               iterationTiming={selectedTaskIteration.timing}
-              agentName={displayAgentName}
-              currentModel={currentModel}
+              agentName={displayAgentInfo.agent}
+              currentModel={displayAgentInfo.model}
               subagentDetailLevel={subagentDetailLevel}
               subagentTree={subagentTree}
               collapsedSubagents={collapsedSubagents}
@@ -1328,8 +1407,8 @@ export function RunApp({
               iterationSegments={selectedTaskIteration.segments}
               viewMode={detailsViewMode}
               iterationTiming={selectedTaskIteration.timing}
-              agentName={displayAgentName}
-              currentModel={currentModel}
+              agentName={displayAgentInfo.agent}
+              currentModel={displayAgentInfo.model}
               subagentDetailLevel={subagentDetailLevel}
               subagentTree={subagentTree}
               collapsedSubagents={collapsedSubagents}
