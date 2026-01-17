@@ -227,6 +227,35 @@ describe('BeadsTrackerPlugin getNextTask', () => {
     });
   });
 
+  describe('excludeIds filter handling', () => {
+    // Tests for excludeIds filter - used by engine to skip failed tasks
+    // See: https://github.com/subsy/ralph-tui/issues/97#issuecomment-3762075053
+
+    test('accepts TaskFilter with excludeIds', async () => {
+      await plugin.initialize({ workingDir: '/tmp/nonexistent-beads-test' });
+
+      // Should accept excludeIds without throwing
+      const result = await plugin.getNextTask({
+        excludeIds: ['task-1', 'task-2', 'task-3'],
+      });
+      expect(result).toBeUndefined();
+    });
+
+    test('accepts TaskFilter with empty excludeIds', async () => {
+      await plugin.initialize({ workingDir: '/tmp/nonexistent-beads-test' });
+
+      const result = await plugin.getNextTask({
+        excludeIds: [],
+      });
+      expect(result).toBeUndefined();
+    });
+
+    test.todo('excludeIds filters out specified tasks from bd ready results - requires CLI mocking');
+    // When bd ready returns tasks [task-1, task-2, task-3] and excludeIds=['task-1'],
+    // getNextTask should return task-2 instead of task-1
+    // This is critical for the engine's skipped task handling
+  });
+
   describe('behavior documentation', () => {
     // These tests document the expected behavior of getNextTask
     // The implementation uses bd ready for server-side dependency filtering

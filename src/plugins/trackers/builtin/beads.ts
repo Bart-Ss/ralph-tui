@@ -611,7 +611,17 @@ export class BeadsTrackerPlugin extends BaseTrackerPlugin {
     }
 
     // Convert to TrackerTask
-    const tasks = beads.map(beadToTask);
+    let tasks = beads.map(beadToTask);
+
+    // Filter out excluded task IDs (used by engine for skipped/failed tasks)
+    if (filter?.excludeIds && filter.excludeIds.length > 0) {
+      const excludeSet = new Set(filter.excludeIds);
+      tasks = tasks.filter((t) => !excludeSet.has(t.id));
+    }
+
+    if (tasks.length === 0) {
+      return undefined;
+    }
 
     // Prefer in_progress tasks over open tasks (same as base implementation)
     const inProgress = tasks.find((t) => t.status === 'in_progress');
