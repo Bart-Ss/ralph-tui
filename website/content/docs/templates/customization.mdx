@@ -28,47 +28,79 @@ The `.hbs` extension stands for Handlebars, the templating engine Ralph uses. Yo
 
 ## Template Locations
 
-### Project-Level Template
+Ralph supports a hierarchical template system with project-level and global templates.
 
-Create a template in your project directory:
+### Project Templates (Recommended)
+
+Create templates in your project's `.ralph-tui/templates/` folder:
 
 ```
 your-project/
 ├── .ralph-tui/
-│   └── config.toml
-├── .ralph-tui-prompt.hbs    # Custom template here
+│   ├── config.toml
+│   └── templates/           # Project-specific templates
+│       ├── beads.hbs        # Override for beads tracker
+│       ├── json.hbs         # Override for json tracker
+│       └── beads-bv.hbs     # Override for beads-bv tracker
 └── ...
 ```
 
-Reference it in your config:
+Templates are automatically detected based on your tracker type. No config changes needed!
 
-```toml
-# .ralph-tui/config.toml
-prompt_template = ".ralph-tui-prompt.hbs"
-```
+<Callout type="info">
+Project templates take precedence over global templates. This lets you customize templates per-project while keeping personal defaults elsewhere.
+</Callout>
 
-Or pass it via CLI:
+### Global Templates
 
-```bash
-ralph-tui run --prompt .ralph-tui-prompt.hbs
-```
-
-### User-Level Templates
-
-For templates that apply across all your projects, use the config directory:
+For templates that apply across all your projects, use the global config directory:
 
 ```
 ~/.config/ralph-tui/
 ├── config.toml              # Global config
-├── prompt.md                # Default for JSON tracker
-└── prompt-beads.md          # Default for Beads trackers
+└── templates/               # Global templates
+    ├── beads.hbs            # Default for Beads tracker
+    ├── beads-bv.hbs         # Default for Beads-BV tracker
+    ├── json.hbs             # Default for JSON tracker
+    └── default.hbs          # Default for other trackers
 ```
 
-Initialize user-level templates with:
+Install global templates with:
 
 ```bash
 ralph-tui template init --global
 ```
+
+### Custom Path (Explicit Override)
+
+You can also specify an explicit template path:
+
+```toml
+# .ralph-tui/config.toml
+prompt_template = "./my-custom-template.hbs"
+```
+
+Or via CLI:
+
+```bash
+ralph-tui run --prompt ./my-template.hbs
+```
+
+<Callout type="tip">
+Explicit paths take highest priority and override all other template sources.
+</Callout>
+
+### Legacy Locations
+
+For backward compatibility, Ralph also checks these older locations:
+
+```
+~/.config/ralph-tui/
+├── prompt.md                # Legacy: JSON tracker
+└── prompt-beads.md          # Legacy: Beads trackers
+```
+
+These are checked after the new `templates/` folder structure.
 
 ## Creating a Custom Template
 

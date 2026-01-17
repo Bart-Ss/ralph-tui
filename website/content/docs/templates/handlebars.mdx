@@ -104,12 +104,27 @@ Ralph provides these variables for template rendering:
 | `cwd` | string | Current working directory path |
 | `currentDate` | string | Current date in ISO format (YYYY-MM-DD) |
 | `currentTimestamp` | string | Current timestamp in ISO format |
+| `beadsDbPath` | string | Full path to beads database (for `bd --db` flag) |
 
-### Progress Tracking
+### PRD Context (Project Requirements)
+
+When using a tracker that supports PRD context (JSON tracker with `metadata.sourcePrd`), these variables provide full project visibility:
+
+| Variable | Type | Description |
+|----------|------|-------------|
+| `prdName` | string | Name of the PRD/project |
+| `prdDescription` | string | PRD description |
+| `prdContent` | string | Full PRD markdown content (for agent to study) |
+| `prdCompletedCount` | string | Number of completed tasks/stories |
+| `prdTotalCount` | string | Total number of tasks/stories |
+
+### Progress & Patterns
 
 | Variable | Type | Description |
 |----------|------|-------------|
 | `recentProgress` | string | Summary of progress from recent iterations |
+| `codebasePatterns` | string | Learnings and patterns from previous iterations |
+| `selectionReason` | string | Why this task was selected (beads-bv tracker) |
 
 ## Variable Details
 
@@ -174,6 +189,56 @@ The progress file is managed automatically by Ralph and includes:
 - Notes from previous iterations
 - Insights and learnings
 - Context for the current task
+
+### PRD Context Variables
+
+When your tracker provides PRD context (e.g., JSON tracker with `metadata.sourcePrd`), you can include full project context in your prompts:
+
+```handlebars
+{{#if prdContent}}
+## PRD: {{prdName}}
+{{#if prdDescription}}
+{{prdDescription}}
+{{/if}}
+
+### Progress: {{prdCompletedCount}}/{{prdTotalCount}} tasks complete
+
+<details>
+<summary>Full PRD Document (click to expand)</summary>
+
+{{prdContent}}
+
+</details>
+{{/if}}
+```
+
+This gives the AI agent full visibility into the project requirements and current progress.
+
+### codebasePatterns
+
+Contains learnings and patterns discovered during previous iterations:
+
+```handlebars
+{{#if codebasePatterns}}
+## Codebase Patterns (Study These First)
+{{codebasePatterns}}
+{{/if}}
+```
+
+Patterns are typically extracted from `.ralph-tui/progress.md` and help agents avoid repeating mistakes.
+
+### selectionReason (beads-bv)
+
+For the beads-bv tracker with graph-aware selection, this explains why the current task was chosen:
+
+```handlebars
+{{#if selectionReason}}
+## Why This Task Was Selected
+{{selectionReason}}
+{{/if}}
+```
+
+This might include information about dependencies, blocking relationships, or priority scores.
 
 ### priority
 
