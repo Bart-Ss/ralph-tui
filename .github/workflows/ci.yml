@@ -130,23 +130,22 @@ jobs:
 
       - name: Check coverage threshold
         run: |
-          # Extract line coverage percentage from lcov summary
-          # Format: "  lines......: XX.X% (XXXX of XXXX lines)"
-          COVERAGE=$(grep -E "lines\.*:" coverage-summary.txt | grep -oE "[0-9]+\.[0-9]+" | head -1 || true)
+          # Use coverage from the main tests/ batch for threshold check
+          # (lcov merge produces inaccurate totals due to different line instrumentation per batch)
+          # Extract from the first "All files" line in coverage-output.txt (tests/ batch)
+          COVERAGE=$(grep -m1 "^All files" coverage-output.txt | awk '{print $4}' | tr -d '%' || true)
 
           # Fallback if parsing fails
           [ -z "$COVERAGE" ] && COVERAGE="0"
 
-          echo "Merged Coverage: $COVERAGE%"
+          echo "Coverage (tests/ batch): $COVERAGE%"
 
-          # Check if coverage is below 30%
-          # Note: Threshold lowered from 40% after implementing proper coverage merging
-          # which revealed accurate total coverage (previously only one batch was checked)
-          if [ "$(echo "$COVERAGE < 30" | bc -l)" -eq 1 ]; then
-            echo "❌ Coverage $COVERAGE% is below 30% threshold"
+          # Check if coverage is below 40%
+          if [ "$(echo "$COVERAGE < 40" | bc -l)" -eq 1 ]; then
+            echo "❌ Coverage $COVERAGE% is below 40% threshold"
             exit 1
           fi
-          echo "✅ Coverage $COVERAGE% meets 30% threshold"
+          echo "✅ Coverage $COVERAGE% meets 40% threshold"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
