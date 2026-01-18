@@ -1276,11 +1276,17 @@ export function RunApp({
   // NOTE: Only use selectedSubagentId when viewing the current task - subagent tree
   // only shows subagents for the currently executing task
   const displayIterationOutput = useMemo(() => {
-    // Check if we're viewing the currently executing task
-    const isViewingCurrentTask = selectedTask?.id === currentTaskId;
+    // Compute effective task ID - what task are we actually viewing?
+    // This avoids using potentially stale selectedTask?.id directly
+    const effectiveTaskId = viewMode === 'iterations'
+      ? selectedIteration?.task?.id
+      : selectedTask?.id;
 
-    // Check if task root is selected (currentTaskId or 'main' for backwards compat)
-    const isTaskRootSelected = selectedSubagentId === currentTaskId || selectedSubagentId === 'main';
+    // Check if we're viewing the currently executing task
+    const isViewingCurrentTask = effectiveTaskId === currentTaskId;
+
+    // Check if task root is selected (effectiveTaskId or 'main' for backwards compat)
+    const isTaskRootSelected = selectedSubagentId === effectiveTaskId || selectedSubagentId === 'main';
 
     // If not viewing current task, or task root is selected, show the iteration output
     if (!isViewingCurrentTask || isTaskRootSelected) {
@@ -1366,7 +1372,7 @@ export function RunApp({
     }
 
     return `[Subagent ${selectedSubagentId}]\nNo output available`;
-  }, [selectedSubagentId, currentTaskId, selectedTask?.id, selectedTaskIteration.output, engine, subagentTree]);
+  }, [selectedSubagentId, currentTaskId, selectedTask?.id, selectedIteration?.task?.id, viewMode, selectedTaskIteration.output, engine, subagentTree]);
 
   // Compute historic agent/model for display when viewing completed iterations
   // Falls back to current values if viewing a live iteration or no historic data available

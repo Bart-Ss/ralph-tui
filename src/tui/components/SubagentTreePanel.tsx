@@ -390,7 +390,7 @@ export function SubagentTreePanel({
               {' '}{currentTaskId || 'Task'}
             </span>
             {currentTaskTitle && (
-              <span fg={colors.fg.secondary}> {truncateText(currentTaskTitle, maxRowWidth - (currentTaskId?.length || 4) - 10)}</span>
+              <span fg={colors.fg.secondary}> {truncateText(currentTaskTitle, Math.max(0, maxRowWidth - (currentTaskId?.length || 4) - 10))}</span>
             )}
             {tree.length > 0 && <span fg={colors.fg.muted}> ({tree.length})</span>}
           </text>

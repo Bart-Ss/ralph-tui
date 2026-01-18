@@ -85,7 +85,8 @@ describe('OpenCode Output Parser', () => {
 
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error).toContain('');
+        expect(result.error).toBeDefined();
+        expect(result.error!.length).toBeGreaterThan(0);
       }
     });
 
