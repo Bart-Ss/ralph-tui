@@ -21,6 +21,7 @@ import {
   executeDoctorCommand,
   executeInfoCommand,
   executeSkillsCommand,
+  executeRemoteCommand,
 } from './commands/index.js';
 
 /**
@@ -39,6 +40,7 @@ Commands:
   run [options]       Start Ralph execution
   resume [options]    Resume an interrupted session
   status [options]    Check session status (headless, for CI/scripts)
+  remote [subcommand] Manage remote server configurations
   logs [options]      View/manage iteration output logs
   setup [options]     Run interactive project setup (alias: init)
   doctor [options]    Diagnose agent configuration issues
@@ -74,6 +76,9 @@ Run Options:
   --sandbox=sandbox-exec  Force sandbox-exec (macOS)
   --no-sandbox        Disable sandboxing
   --no-network        Disable network access in sandbox
+  --listen            Enable remote listener (WebSocket server)
+  --listen-port <n>   Port for remote listener (default: 7890)
+  --rotate-token      Rotate server token before starting listener
 
 Resume Options:
   --cwd <path>        Working directory
@@ -117,6 +122,11 @@ Examples:
   ralph-tui info -c                      # Copyable format for GitHub issues
   ralph-tui skills list                  # List bundled skills
   ralph-tui skills install --force       # Force reinstall all skills
+  ralph-tui run --listen                 # Run with remote listener enabled
+  ralph-tui run --listen --rotate-token  # Rotate token and start listener
+  ralph-tui remote add prod server:7890 --token abc  # Add remote
+  ralph-tui remote list                  # List remotes with status
+  ralph-tui remote test prod             # Test connectivity
 `);
 }
 
@@ -222,6 +232,12 @@ async function handleSubcommand(args: string[]): Promise<boolean> {
   // Skills command
   if (command === 'skills') {
     await executeSkillsCommand(args.slice(1));
+    return true;
+  }
+
+  // Remote command (manage remote configurations)
+  if (command === 'remote') {
+    await executeRemoteCommand(args.slice(1));
     return true;
   }
 
