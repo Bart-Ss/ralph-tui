@@ -6,8 +6,8 @@
 
 import { spawn } from 'node:child_process';
 import { constants, readFileSync } from 'node:fs';
-import { access } from 'node:fs/promises';
-import { join, dirname } from 'node:path';
+import { access, readFile } from 'node:fs/promises';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BaseTrackerPlugin } from '../../base.js';
 import type {
@@ -41,6 +41,7 @@ interface BrTaskJson {
   id: string;
   title: string;
   description?: string;
+  external_ref?: string;
   status: string;
   priority: number;
   issue_type?: string;
@@ -575,6 +576,86 @@ export class BeadsRustTrackerPlugin extends BaseTrackerPlugin {
       message: 'Beads-rust tracker data flushed to JSONL',
       syncedAt: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Get PRD context for template rendering.
+   * Reads epic external_ref (prd:./path/to/file.md) and returns the PRD markdown content.
+   */
+  async getPrdContext(): Promise<{
+    name: string;
+    description?: string;
+    content: string;
+    completedCount: number;
+    totalCount: number;
+  } | null> {
+    const epicId = this.epicId;
+    if (!epicId) {
+      return null;
+    }
+
+    try {
+      const epicResult = await execBr(['show', epicId, '--json'], this.workingDir);
+      if (epicResult.exitCode !== 0) {
+        return null;
+      }
+
+      const epics = JSON.parse(epicResult.stdout) as BrTaskJson[];
+      if (epics.length === 0) {
+        return null;
+      }
+
+      const epic = epics[0]!;
+      const externalRef = epic.external_ref;
+
+      if (!externalRef || !externalRef.startsWith('prd:')) {
+        return null;
+      }
+
+      const prdPath = externalRef.substring(4);
+      if (!prdPath) {
+        return null;
+      }
+
+      const fullPath = prdPath.startsWith('/') ? prdPath : resolve(this.workingDir, prdPath);
+
+      let content: string;
+      try {
+        content = await readFile(fullPath, 'utf-8');
+      } catch {
+        return null;
+      }
+
+      const childrenResult = await execBr(
+        ['list', '--json', '--all', '--parent', epicId],
+        this.workingDir
+      );
+
+      let completedCount = 0;
+      let totalCount = 0;
+
+      if (childrenResult.exitCode === 0) {
+        try {
+          const children = JSON.parse(childrenResult.stdout) as BrTaskJson[];
+          totalCount = children.length;
+          completedCount = children.filter(
+            (c) => c.status === 'closed' || c.status === 'cancelled'
+          ).length;
+        } catch {
+          // Ignore malformed list output and return 0/0 counts.
+        }
+      }
+
+      return {
+        name: epic.title,
+        description: epic.description,
+        content,
+        completedCount,
+        totalCount,
+      };
+    } catch {
+      return null;
+    }
   }
 
   /**

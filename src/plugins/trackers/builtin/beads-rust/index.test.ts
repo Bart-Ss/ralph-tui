@@ -13,6 +13,10 @@ let mockSpawnExitCode = 0;
 let mockSpawnStdout = '';
 let mockSpawnStderr = '';
 
+let mockReadFileShouldFail = false;
+let mockReadFileContent = '';
+let mockReadFilePaths: string[] = [];
+
 type MockSpawnResponse = { exitCode: number; stdout?: string; stderr?: string };
 let mockSpawnResponses: MockSpawnResponse[] = [];
 
@@ -63,6 +67,13 @@ mock.module('node:fs/promises', () => ({
       throw new Error('ENOENT');
     }
   },
+  readFile: async (path: string) => {
+    mockReadFilePaths.push(path);
+    if (mockReadFileShouldFail) {
+      throw new Error('ENOENT');
+    }
+    return mockReadFileContent;
+  },
   constants: {
     R_OK: 4,
   },
@@ -78,6 +89,9 @@ describe('BeadsRustTrackerPlugin', () => {
     mockSpawnStdout = '';
     mockSpawnStderr = '';
     mockSpawnResponses = [];
+    mockReadFileShouldFail = false;
+    mockReadFileContent = '';
+    mockReadFilePaths = [];
   });
 
   test('reports unavailable when .beads directory is missing', async () => {
@@ -745,6 +759,126 @@ describe('BeadsRustTrackerPlugin', () => {
       expect(template).toContain('br close');
       expect(template).toContain('br sync --flush-only');
       expect(template).not.toContain('bd close');
+    });
+  });
+
+  describe('getPrdContext', () => {
+    test('returns null when no epic ID is configured', async () => {
+      mockSpawnResponses = [{ exitCode: 0, stdout: 'br version 0.4.1\n' }];
+
+      const plugin = new BeadsRustTrackerPlugin();
+      await plugin.initialize({ workingDir: '/test' });
+
+      mockSpawnArgs = [];
+      const result = await plugin.getPrdContext();
+
+      expect(result).toBeNull();
+      expect(mockSpawnArgs.length).toBe(0);
+      expect(mockReadFilePaths.length).toBe(0);
+    });
+
+    test('reads PRD file content and returns completion stats', async () => {
+      mockReadFileContent = '# PRD\n\nHello\n';
+      mockSpawnResponses = [
+        { exitCode: 0, stdout: 'br version 0.4.1\n' },
+        {
+          exitCode: 0,
+          stdout: JSON.stringify([
+            {
+              id: 'epic1',
+              title: 'Epic 1',
+              description: 'Epic desc',
+              status: 'open',
+              priority: 0,
+              external_ref: 'prd:./tasks/prd.md',
+            },
+          ]),
+        },
+        {
+          exitCode: 0,
+          stdout: JSON.stringify([
+            { id: 'epic1.1', title: 'A', status: 'open', priority: 1 },
+            { id: 'epic1.2', title: 'B', status: 'closed', priority: 1 },
+            { id: 'epic1.3', title: 'C', status: 'cancelled', priority: 1 },
+          ]),
+        },
+      ];
+
+      const plugin = new BeadsRustTrackerPlugin();
+      await plugin.initialize({ workingDir: '/test', epicId: 'epic1' });
+      mockSpawnArgs = [];
+
+      const result = await plugin.getPrdContext();
+
+      expect(result).toEqual({
+        name: 'Epic 1',
+        description: 'Epic desc',
+        content: '# PRD\n\nHello\n',
+        completedCount: 2,
+        totalCount: 3,
+      });
+      expect(mockReadFilePaths).toEqual(['/test/tasks/prd.md']);
+      expect(mockSpawnArgs.map((c) => c.args)).toEqual([
+        ['show', 'epic1', '--json'],
+        ['list', '--json', '--all', '--parent', 'epic1'],
+      ]);
+    });
+
+    test('returns null when epic external_ref is missing or not a PRD link', async () => {
+      mockSpawnResponses = [
+        { exitCode: 0, stdout: 'br version 0.4.1\n' },
+        {
+          exitCode: 0,
+          stdout: JSON.stringify([
+            {
+              id: 'epic1',
+              title: 'Epic 1',
+              status: 'open',
+              priority: 0,
+              external_ref: 'http://example.com',
+            },
+          ]),
+        },
+      ];
+
+      const plugin = new BeadsRustTrackerPlugin();
+      await plugin.initialize({ workingDir: '/test', epicId: 'epic1' });
+      mockSpawnArgs = [];
+
+      const result = await plugin.getPrdContext();
+
+      expect(result).toBeNull();
+      expect(mockReadFilePaths.length).toBe(0);
+      expect(mockSpawnArgs.map((c) => c.args)).toEqual([['show', 'epic1', '--json']]);
+    });
+
+    test('returns null when PRD file cannot be read', async () => {
+      mockReadFileShouldFail = true;
+      mockSpawnResponses = [
+        { exitCode: 0, stdout: 'br version 0.4.1\n' },
+        {
+          exitCode: 0,
+          stdout: JSON.stringify([
+            {
+              id: 'epic1',
+              title: 'Epic 1',
+              status: 'open',
+              priority: 0,
+              external_ref: 'prd:./tasks/prd.md',
+            },
+          ]),
+        },
+      ];
+
+      const plugin = new BeadsRustTrackerPlugin();
+      await plugin.initialize({ workingDir: '/test', epicId: 'epic1' });
+      mockSpawnArgs = [];
+
+      const result = await plugin.getPrdContext();
+
+      expect(result).toBeNull();
+      expect(mockReadFilePaths).toEqual(['/test/tasks/prd.md']);
+      expect(mockSpawnArgs.map((c) => c.args)).toEqual([['show', 'epic1', '--json']]);
     });
   });
 });
